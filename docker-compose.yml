@@ -30,6 +30,53 @@ services:
     networks:
       - mm-network
 
+  generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: generator
+    command: python -m app.generator.generateur
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - mm-network
+    restart: unless-stopped
+
+  detector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: detector
+    command: python -m app.detector.detecteur
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./app/detector/modele_fraude.pkl:/project/app/detector/modele_fraude.pkl:ro
+      - ./moneyshield.db:/project/moneyshield.db
+    networks:
+      - mm-network
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dashboard
+    command: streamlit run app/dashboard/dashboard.py --server.port=8501 --server.address=0.0.0.0
+    depends_on:
+      - detector
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./moneyshield.db:/project/moneyshield.db
+    networks:
+      - mm-network
+    restart: unless-stopped
+
 networks:
   mm-network:
     driver: bridge

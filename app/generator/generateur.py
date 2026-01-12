@@ -2,49 +2,41 @@ import time
 import json
 import random
 import uuid
+import os
 from datetime import datetime
 from kafka import KafkaProducer
 from faker import Faker
 
-# Configuration
-KAFKA_TOPIC = "flux_mobile_money"
-# On garde 127.0.0.1 pour la fiabilité Docker sur Windows
-KAFKA_BOOTSTRAP_SERVERS = ['127.0.0.1:9092']
+# --- NOUVEAUX IMPORTS (Architecture Modulaire) ---
+from app.config import KAFKA_TOPIC, MAP_VILLES, MAP_OPERATEURS
+
+# --- CONFIGURATION ---
+# Récupération dynamique de l'adresse (Docker ou Local)
+KAFKA_SERVER = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
 # Initialisation de Faker
 fake = Faker('fr_FR')
 
-# Liste des villes ivoiriennes (Mise à jour v3)
-VILLES_CI = [
-    # Abidjan
-    "Abidjan-Yopougon", "Abidjan-Abobo", "Abidjan-Cocody",
-    "Abidjan-Plateau", "Abidjan-Marcory", "Abidjan-Koumassi", "Abidjan-Adjamé",
-    # Intérieur
-    "Bouaké", "Daloa", "Yamoussoukro", "San-Pédro",
-    "Korhogo", "Man", "Gagnoa", "Grand-Bassam",
-    "Soubré", "Aboisso", "Odienné", "Bondoukou", "Séguéla"
-]
-
-# Les opérateurs mobiles (J'ai ajouté Moov pour utiliser le préfixe 01)
-OPERATEURS = ["Orange Money", "MTN MoMo", "Moov Money", "Wave"]
-
+# Reconstruction des listes à partir de la config centrale
+# (On prend les clés du dictionnaire pour avoir les noms)
+VILLES_CI = list(MAP_VILLES.keys())
+OPERATEURS = list(MAP_OPERATEURS.keys())
 
 def init_kafka_producer():
     """Initialise le producteur Kafka."""
-    print("⏳ Connexion à Kafka...")
+    print(f"⏳ Connexion à Kafka sur : {KAFKA_SERVER} ...")
     try:
         producer = KafkaProducer(
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=[KAFKA_SERVER],
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
-        print(f"✅ Connecté avec succès à Kafka ({KAFKA_BOOTSTRAP_SERVERS[0]})")
+        print(f"✅ Connecté avec succès à Kafka")
         return producer
     except Exception as e:
         print("\n" + "=" * 60)
         print("❌ ERREUR: Connexion Kafka impossible")
         print(f"📋 Détails: {e}")
-        print("\n💡 Vérifiez que Kafka est démarré:")
-        print("   docker-compose up -d")
+        print("\n💡 Vérifiez que Kafka est démarré via Docker.")
         print("=" * 60 + "\n")
         return None
 

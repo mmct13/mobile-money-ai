@@ -9,7 +9,7 @@ import os
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
 FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
-NB_TRANSACTIONS = 20000  # Encore plus de données pour la précision
+NB_TRANSACTIONS = 50000  # Encore plus de données pour la précision
 
 fake = Faker('fr_FR')
 

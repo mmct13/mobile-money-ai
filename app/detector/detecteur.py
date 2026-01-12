@@ -5,45 +5,18 @@ from kafka import KafkaConsumer
 from datetime import datetime
 import os
 import time
+
+# --- NOUVEAUX IMPORTS (Architecture Modulaire) ---
+from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX, KAFKA_TOPIC
+from app.database import get_connection
+
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
 FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
 
-KAFKA_TOPIC = "flux_mobile_money"
-KAFKA_BOOTSTRAP_SERVERS = ['127.0.0.1:9092']
-
-# --- MAPPINGS (DOIT ETRE IDENTIQUE A ENTRAINEMENT.PY) ---
-MAP_VILLES = {
-    # Communes d'Abidjan (Détail)
-    "Abidjan-Yopougon": 0, "Abidjan-Abobo": 1, "Abidjan-Cocody": 2,
-    "Abidjan-Plateau": 3, "Abidjan-Marcory": 4, "Abidjan-Koumassi": 5, "Abidjan-Adjamé": 6,
-    # Intérieur
-    "Bouaké": 7, "Daloa": 8, "Yamoussoukro": 9, "San-Pédro": 10,
-    "Korhogo": 11, "Man": 12, "Gagnoa": 13, "Grand-Bassam": 14,
-    "Soubré": 15, "Aboisso": 16, "Odienné": 17, "Bondoukou": 18, "Séguéla": 19
-}
-
-MAP_TYPES = {
-    "DEPOT": 0,
-    "TRANSFERT": 1,
-    "RETRAIT": 2,
-    "PAIEMENT_MARCHAND": 3
-}
-
-MAP_OPERATEURS = {
-    "Orange Money": 0,
-    "MTN MoMo": 1,
-    "Moov Money": 2,
-    "Wave": 3
-}
-
-MAP_CANAUX = {
-    "USSD": 0,
-    "APP": 1,
-    "CARTE": 2,
-    "AGENT": 3
-}
-
+# Récupération de l'adresse Kafka (Docker ou Local)
+# Si la variable d'env n'existe pas, on utilise localhost par défaut
+KAFKA_SERVER = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
 def charger_modele():
     """Charge le modèle IA de détection de fraude."""
@@ -52,9 +25,10 @@ def charger_modele():
         print("❌ ERREUR: Modèle IA introuvable")
         print(f"📂 Chemin attendu: {FICHIER_MODELE}")
         print("\n💡 Solution:")
-        print("   python app/detector/entrainement.py")
+        print("   python -m app.detector.entrainement")
         print("=" * 60 + "\n")
         exit(1)
+    
     print("\n" + "=" * 60)
     print("🛡️  MONEYSHIELD CI - Détecteur de Fraude IA")
     print("=" * 60)
@@ -65,15 +39,15 @@ def charger_modele():
     return model
 
 
-
 def main():
     model = charger_modele()
 
     # Initialisation Kafka
+    print(f"⏳ Connexion à Kafka sur : {KAFKA_SERVER} ...")
     try:
         consumer = KafkaConsumer(
             KAFKA_TOPIC,
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=[KAFKA_SERVER],
             auto_offset_reset='latest',
             value_deserializer=lambda x: json.loads(x.decode('utf-8'))
         )
@@ -81,8 +55,7 @@ def main():
         print("\n" + "=" * 60)
         print("❌ ERREUR: Connexion Kafka impossible")
         print(f"📋 Détails: {e}")
-        print("\n💡 Vérifiez que Kafka est démarré:")
-        print("   docker-compose up -d")
+        print("\n💡 Vérifiez que Kafka est démarré via Docker.")
         print("=" * 60 + "\n")
         return
 
@@ -100,6 +73,7 @@ def main():
             heure = dt.hour
 
             ville_str = transaction.get('ville')
+            # Utilisation du mapping importé de app.config
             ville_code = MAP_VILLES.get(ville_str, -1)
 
             type_str = transaction.get('type_transaction')
@@ -136,6 +110,7 @@ def main():
                 print(f"📱 Opérateur: {op_str} (Canal: {canal_str})")
                 print(f"🔄 Type: {type_str}")
                 print(f"👤 Expéditeur: {transaction['expediteur']}")
+                
                 # 4bis. Classification heuristique (MoneyShield CI)
                 motif = "Inconnu"
                 if transaction['montant'] > 1000000:
@@ -152,9 +127,11 @@ def main():
                     motif = "Anomalie comportementale IA"
 
                 print(f"🧐 Motif probable: {motif}")
-                print("🛡️  MoneyShield CI - Alerte enregistrée")
+                print("🛡️  MoneyShield CI - Alerte enregistrée en BDD")
                 print("━" * 60 + "\n")
-                sauvegarder_alerte(transaction, score, heure, type_str, ville_str, motif)
+                
+                # APPEL DE LA NOUVELLE FONCTION DE SAUVEGARDE SQL
+                sauvegarder_alerte(transaction, score, type_str, ville_str, motif)
             else:
                 # Transaction normale
                 print(f"✅ Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
@@ -163,35 +140,38 @@ def main():
             print(f"⚠️  Erreur de traitement: {e}")
 
 
-def sauvegarder_alerte(transaction, score, heure, type_str, ville_str, motif):
-    alerte = {
-        "timestamp": time.time(),
-        "date_heure": transaction['date_heure'],
-        "montant": transaction['montant'],
-        "expediteur": transaction['expediteur'],
-        "ville": ville_str,
-        "operateur": transaction['operateur'],
-        "canal": transaction.get('canal', 'INCONNU'),
-        "type": type_str,
-        "score": score,
-        "motif": motif
-    }
-
-    fichier_db = os.path.join(os.path.dirname(DOSSIER_COURANT), "dashboard", "alertes_db.json")
-
-    data = []
-    if os.path.exists(fichier_db):
-        try:
-            with open(fichier_db, 'r') as f:
-                data = json.load(f)
-        except:
-            data = []
-
-    data.append(alerte)
-
-    with open(fichier_db, 'w') as f:
-        json.dump(data, f, indent=4)
-
+def sauvegarder_alerte(transaction, score, type_str, ville_str, motif):
+    """Sauvegarde l'alerte dans SQLite au lieu du JSON."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Requête SQL sécurisée
+        sql = '''
+            INSERT INTO alertes 
+            (timestamp, date_heure, montant, expediteur, ville, operateur, canal, type_trans, score, motif)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        
+        valeurs = (
+            time.time(),
+            transaction['date_heure'],
+            transaction['montant'],
+            transaction['expediteur'],
+            ville_str,
+            transaction['operateur'],
+            transaction.get('canal', 'INCONNU'),
+            type_str,
+            float(score),
+            motif
+        )
+        
+        cursor.execute(sql, valeurs)
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        print(f"⚠️ Erreur lors de l'écriture en base de données: {e}")
 
 
 if __name__ == "__main__":
