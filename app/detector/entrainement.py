@@ -5,6 +5,7 @@ import joblib
 import random
 from faker import Faker
 import os
+from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX
 
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
@@ -12,39 +13,6 @@ FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
 NB_TRANSACTIONS = 50000  # Encore plus de données pour la précision
 
 fake = Faker('fr_FR')
-
-# --- MAPPINGS ---
-MAP_VILLES = {
-    # Communes d'Abidjan (Détail)
-    "Abidjan-Yopougon": 0, "Abidjan-Abobo": 1, "Abidjan-Cocody": 2,
-    "Abidjan-Plateau": 3, "Abidjan-Marcory": 4, "Abidjan-Koumassi": 5, "Abidjan-Adjamé": 6,
-    # Intérieur
-    "Bouaké": 7, "Daloa": 8, "Yamoussoukro": 9, "San-Pédro": 10,
-    "Korhogo": 11, "Man": 12, "Gagnoa": 13, "Grand-Bassam": 14,
-    "Soubré": 15, "Aboisso": 16, "Odienné": 17, "Bondoukou": 18, "Séguéla": 19
-}
-
-MAP_TYPES = {
-    "DEPOT": 0,
-    "TRANSFERT": 1,
-    "RETRAIT": 2,
-    "PAIEMENT_MARCHAND": 3
-}
-
-MAP_OPERATEURS = {
-    "Orange Money": 0,
-    "MTN MoMo": 1,
-    "Moov Money": 2,
-    "Wave": 3
-}
-
-MAP_CANAUX = {
-    "USSD": 0,  # #144# etc
-    "APP": 1,   # Smartphone
-    "CARTE": 2, # Note: Wave a des cartes
-    "AGENT": 3  # Kiosque physique
-}
-
 
 def generer_donnees_historiques():
     """Génère des données avec contexte enrichi (Communes, Canaux)."""
@@ -205,7 +173,7 @@ def main():
     print("   1. Démarrer Kafka: docker-compose up -d")
     print("   2. Lancer le détecteur: python app/detector/detecteur.py")
     print("   3. Lancer le générateur: python app/generator/generateur.py")
-    print("   4. Ouvrir le dashboard: streamlit run app/dashboard/app.py")
+    print("   4. Ouvrir le dashboard: streamlit run app/dashboard/dashboard.py")
     print("\n💡 Ou utilisez: start_app.bat")
     print("=" * 60 + "\n")
 

@@ -1,168 +1,125 @@
 @echo off
 setlocal enabledelayedexpansion
-title MoneyShield CI - Demarrage Dockerise
+title MoneyShield CI - Demarrage Systeme
 color 0A
 
-echo ============================================================
-echo    MONEYSHIELD CI - Protection Fraude Mobile Money
-echo    Lancement de l'architecture Docker (v2.1)
-echo ============================================================
+echo ===============================================================================
+echo    MONEYSHIELD CI - SYSTEME DE PROTECTION ANTI-FRAUDE
+echo    Demarrage de l'infrastructure
+echo ===============================================================================
 echo.
 
-REM --- ETAPE 1 : VERIFICATION DE PYTHON ---
-echo [1/5] Verification de Python
+REM --- ETAPE 1 : VERIFICATIONS PRELIMINAIRES ---
+echo [1/5] Verification de l'environnement
+
+REM Verification Python
 python --version >nul 2>&1
 if !ERRORLEVEL! NEQ 0 (
-    echo.
-    echo [ERREUR] Python n'est pas installe ou n'est pas dans le PATH.
-    echo Veuillez installer Python 3.9+ depuis https://www.python.org/
-    echo.
-    echo Appuyez sur une touche pour quitter...
-    pause >nul
+    echo [ERREUR] Python n'est pas detecte. Veuillez installer Python 3.9+.
+    pause
     exit /b 1
 )
-echo       Python detecte : OK
+echo    - Python : OK
+
+REM Verification Docker
+docker --version >nul 2>&1
+if !ERRORLEVEL! NEQ 0 (
+    echo [ERREUR] Docker n'est pas lance. Veuillez demarrer Docker Desktop.
+    pause
+    exit /b 1
+)
+echo    - Docker : OK
 echo.
 
-REM --- ETAPE 2 : PREPARATION DE L'ENVIRONNEMENT LOCAL ---
-echo [2/5] Preparation de l'environnement virtuel
+REM --- ETAPE 2 : ENVIRONNEMENT VIRTUEL ---
+echo [2/5] Configuration Python
 
 if not exist ".venv" (
-    echo       Environnement virtuel non trouve - Creation en cours
+    echo    - Creation de l'environnement virtuel...
     python -m venv .venv
     if !ERRORLEVEL! NEQ 0 (
-        echo.
-        echo [ERREUR] Impossible de creer l'environnement virtuel.
-        echo.
-        echo Appuyez sur une touche pour quitter...
-        pause >nul
+        echo [ERREUR] Echec de la creation de .venv
+        pause
         exit /b 1
     )
     
-    echo       Installation des dependances en cours
-    if exist "requirements.txt" (
-        .venv\Scripts\python.exe -m pip install --upgrade pip >nul 2>&1
-        .venv\Scripts\python.exe -m pip install -r requirements.txt >nul 2>&1
-        if !ERRORLEVEL! NEQ 0 (
-            echo.
-            echo [ERREUR] Echec de l'installation des dependances.
-            echo.
-            echo Appuyez sur une touche pour quitter...
-            pause >nul
-            exit /b 1
-        )
-        echo       Dependances installees avec succes.
-    ) else (
-        echo       [AVERTISSEMENT] requirements.txt introuvable.
-        echo       Installation minimale en cours
-        .venv\Scripts\python.exe -m pip install pandas scikit-learn joblib streamlit kafka-python faker numpy >nul 2>&1
-        if !ERRORLEVEL! NEQ 0 (
-            echo.
-            echo [ERREUR] Echec de l'installation minimale.
-            echo.
-            echo Appuyez sur une touche pour quitter...
-            pause >nul
-           exit /b 1
-        )
-        echo       Installation minimale terminee.
+    echo    - Installation des dependances...
+    .venv\Scripts\python.exe -m pip install --upgrade pip >nul 2>&1
+    .venv\Scripts\python.exe -m pip install -r requirements.txt >nul 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        echo [ERREUR] Echec de l'installation des librairies.
+        pause
+        exit /b 1
     )
+    echo    - Dependances installees.
 ) else (
-    echo       Environnement virtuel detecte : OK
+    echo    - Environnement virtuel existant detecte.
 )
 echo.
 
-REM --- ETAPE 3 : GENERATION DU MODELE IA ---
-echo [3/5] Verification du modele IA
+REM --- ETAPE 3 : MODELE IA ---
+echo [3/5] Verification du Modele IA
 
-REM Definition du PYTHONPATH pour les imports relatifs
 set PYTHONPATH=%CD%
-
-if exist "app\detector\modele_fraude.pkl" (
-    echo       Modele IA existant detecte : OK
-) else (
-    echo       Le modele est manquant - Entrainement en cours
-    echo       Veuillez patienter (~10-20 secondes)
-    echo.
+if not exist "app\detector\modele_fraude.pkl" (
+    echo    - Modele introuvable. Entrainement initial en cours...
+    echo      (Cette operation peut prendre quelques secondes)
     
-    REM Utilisation de -m pour gerer correctement les imports
     .venv\Scripts\python.exe -m app.detector.entrainement
     
     if !ERRORLEVEL! NEQ 0 (
-        echo.
-        echo [ERREUR CRITIQUE] Echec de l'entrainement du modele IA.
-        echo Verifiez que :
-        echo    1. Vous etes a la racine du projet
-        echo    2. Les fichiers de config sont presents
-        echo.
-        echo Appuyez sur une touche pour quitter...
-        pause >nul
+        echo [ERREUR] L'entrainement du modele a echoue.
+        pause
         exit /b 1
     )
-    echo       Modele genere avec succes !
+    echo    - Modele genere et sauvegarde.
+) else (
+    echo    - Modele IA present.
 )
 echo.
 
-REM --- ETAPE 4 : LANCEMENT DOCKER COMPOSE ---
+REM --- ETAPE 4 : DEMARRAGE DES SERVICES ---
 echo [4/5] Lancement des conteneurs Docker
-echo       Verification de Docker
 
-docker --version >nul 2>&1
-if !ERRORLEVEL! NEQ 0 (
-    echo.
-    echo [ERREUR] Docker n'est pas lance ou installe.
-    echo Veuillez lancer Docker Desktop.
-    echo.
-    echo Appuyez sur une touche pour quitter...
-    pause >nul
-    exit /b 1
-)
+echo    - Arret des anciens conteneurs potentiels...
+docker-compose down >nul 2>&1
 
-echo       Docker detecte : OK
-echo       Construction et demarrage des services
-echo.
-
+echo    - Demarrage de l'infrastructure (Kafka, Zookeeper, App)...
 docker-compose up -d --build
 
 if !ERRORLEVEL! NEQ 0 (
-    echo.
-    echo [ERREUR DOCKER] Impossible de lancer les services.
-    echo Verifiez que le fichier docker-compose.yml est present.
-    echo.
-    echo Appuyez sur une touche pour quitter...
-    pause >nul
+    echo [ERREUR] Impossible de lancer les services Docker.
+    echo Verifiez les logs avec : docker-compose logs
+    pause
     exit /b 1
 )
+echo    - Services demarres avec succes.
 echo.
 
-REM --- ETAPE 5 : FINALISATION ---
-echo [5/5] Attente de la stabilisation des services
+REM --- ETAPE 5 : INITIALISATION ---
+echo [5/5] Finalisation
+
+echo    - Attente de la stabilisation des services (10s)...
 timeout /t 10 /nobreak > nul
 
 echo.
-echo ============================================================
-echo    APPLICATION MONEYSHIELD CI DEMARREE AVEC SUCCES !
-echo ============================================================
+echo ===============================================================================
+echo    SYSTEME OPERATIONNEL
+echo ===============================================================================
 echo.
-echo    Architecture deployee :
-echo    - Zookeeper et Kafka (Infrastructure messaging)
-echo    - Generator (Simulateur de transactions)
-echo    - Detector (IA anti-fraude et Base de donnees)
-echo    - Dashboard (Interface Web Streamlit)
+echo    Etat des services :
+echo    - Infrastructure (Kafka/Zookeeper) : EN LIGNE
+echo    - Detection Fraude (IA)            : EN LIGNE
+echo    - Generateur Transactions          : EN LIGNE
+echo    - Tableau de Bord                  : EN LIGNE
 echo.
-echo    ACCES DASHBOARD : http://localhost:8501
+echo    ACCES : http://localhost:8501
 echo.
-echo    COMMANDES UTILES :
-echo    - Voir les logs       : docker-compose logs -f
-echo    - Arreter tout        : docker-compose down
-echo.
-echo ============================================================
+echo ===============================================================================
 
-REM Ouverture automatique du navigateur
-echo Ouverture du dashboard
-timeout /t 2 /nobreak > nul
+REM Ouverture du navigateur
 start http://localhost:8501
 
-echo.
-echo Appuyez sur une touche pour fermer cette fenetre.
-echo (Les services continueront de tourner en arriere-plan)
+echo Appuyez sur une touche pour fermer ce terminal.
+echo Les services continuent de fonctionner en arriere-plan.
 pause >nul

@@ -5,10 +5,12 @@ from kafka import KafkaConsumer
 from datetime import datetime
 import os
 import time
+from collections import deque
 
 # --- NOUVEAUX IMPORTS (Architecture Modulaire) ---
 from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX, KAFKA_TOPIC
 from app.database import get_connection
+from app.detector.classificateur_fraude import ClassificateurFraude
 
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +34,7 @@ def charger_modele():
     print("\n" + "=" * 60)
     print("🛡️  MONEYSHIELD CI - Détecteur de Fraude IA")
     print("=" * 60)
-    print("🧠 Chargement du modèle IA v3.0 (Granulaire)...")
+    print("🧠 Chargement du modèle IA v3.1 (Classification Intelligente)...")
     model = joblib.load(FICHIER_MODELE)
     print("✅ Modèle chargé avec succès")
     print("=" * 60 + "\n")
@@ -41,6 +43,19 @@ def charger_modele():
 
 def main():
     model = charger_modele()
+    
+    # Historique glissant pour détection temporelle (1000 dernières transactions)
+    # Permet de détecter vélocité et schtroumpfage
+    historique_transactions = deque(maxlen=1000)
+    
+    # Initialisation du classificateur intelligent
+    classificateur = ClassificateurFraude()
+    print("🎯 Classificateur de fraude intelligent initialisé")
+    print("   📋 9 types de fraudes détectables incluant:")
+    print("      • Vélocité Excessive (répétitions rapides)")
+    print("      • Accumulation/Schtroumpfage (structuring)")
+    print("      • Broutage, SIM Swap, Blanchiment...")
+    print()
 
     # Initialisation Kafka
     print(f"⏳ Connexion à Kafka sur : {KAFKA_SERVER} ...")
@@ -66,6 +81,10 @@ def main():
 
     for message in consumer:
         transaction = message.value
+        
+        # Ajout à l'historique (au début pour accès rapide aux récents)
+        # Note: Dans un système prod, Redis serait mieux, mais deque suffit ici
+        historique_transactions.appendleft(transaction)
 
         try:
             # 1. Extraction et Transformation des données (Preprocessing)
@@ -98,40 +117,36 @@ def main():
             # 3. Prédiction
             prediction = model.predict(features)[0] 
             score = model.decision_function(features)[0]
+            
+            # --- CONTEXTE POUR CLASSIFICATION ---
+            contexte = {
+                'heure': heure,
+                'historique': list(historique_transactions)
+            }
 
             # 4. Logique d'affichage
             if prediction == -1:
                 print("\n" + "━" * 60)
                 print("🚨 ALERTE FRAUDE DÉTECTÉE")
                 print("━" * 60)
-                print(f"⚡ Score de risque: {score:.3f}")
+                print(f"⚡ Score de risque IA: {score:.3f}")
                 print(f"💰 Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
                 print(f"📍 Lieu: {ville_str} à {heure}h")
                 print(f"📱 Opérateur: {op_str} (Canal: {canal_str})")
                 print(f"🔄 Type: {type_str}")
                 print(f"👤 Expéditeur: {transaction['expediteur']}")
                 
-                # 4bis. Classification heuristique (MoneyShield CI)
-                motif = "Inconnu"
-                if transaction['montant'] > 1000000:
-                    motif = "Blanchiment suspecté"
-                elif heure < 6:
-                    motif = "Broutage / Intrusion nocturne"
-                elif transaction.get('canal') == "USSD":
-                    motif = "Ingénierie Sociale / SIM Swap USSD"
-                elif transaction.get('canal') == "APP" and transaction['montant'] > 200000:
-                    motif = "Broutage App / Malware"
-                elif transaction['ville'] in ["San-Pédro", "Soubré"] and transaction['montant'] > 500000:
-                    motif = "Flux financier atypique (Zone Rurale)"
-                else:
-                    motif = "Anomalie comportementale IA"
-
-                print(f"🧐 Motif probable: {motif}")
+                # 4bis. Classification intelligente avec CONTEXTE
+                motif, description, confiance = classificateur.classifier(transaction, contexte)
+                
+                print(f"🧐 Motif identifié: {motif}")
+                print(f"   └─ {description}")
+                print(f"   └─ Confiance: {confiance*100:.1f}%")
                 print("🛡️  MoneyShield CI - Alerte enregistrée en BDD")
                 print("━" * 60 + "\n")
                 
                 # APPEL DE LA NOUVELLE FONCTION DE SAUVEGARDE SQL
-                sauvegarder_alerte(transaction, score, type_str, ville_str, motif)
+                sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance)
             else:
                 # Transaction normale
                 print(f"✅ Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
@@ -140,17 +155,18 @@ def main():
             print(f"⚠️  Erreur de traitement: {e}")
 
 
-def sauvegarder_alerte(transaction, score, type_str, ville_str, motif):
-    """Sauvegarde l'alerte dans SQLite au lieu du JSON."""
+
+def sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance):
+    """Sauvegarde l'alerte dans SQLite avec le score de confiance."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Requête SQL sécurisée
+        # Requête SQL sécurisée avec confiance
         sql = '''
             INSERT INTO alertes 
-            (timestamp, date_heure, montant, expediteur, ville, operateur, canal, type_trans, score, motif)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (timestamp, date_heure, montant, expediteur, ville, operateur, canal, type_trans, score, motif, confiance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
         
         valeurs = (
@@ -163,7 +179,8 @@ def sauvegarder_alerte(transaction, score, type_str, ville_str, motif):
             transaction.get('canal', 'INCONNU'),
             type_str,
             float(score),
-            motif
+            motif,
+            float(confiance)
         )
         
         cursor.execute(sql, valeurs)

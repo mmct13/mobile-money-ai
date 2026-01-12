@@ -17,7 +17,8 @@ def init_db():
             canal TEXT,
             type_trans TEXT,
             score REAL,
-            motif TEXT
+            motif TEXT,
+            confiance REAL DEFAULT 0.0
         )
     ''')
     conn.commit()
