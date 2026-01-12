@@ -36,10 +36,10 @@ Le marché ivoirien du Mobile Money fait face à des menaces spécifiques et év
 
 ```mermaid
 graph LR
-    G[Générateur de Flux] -->|JSON (Transactions)| K(Apache Kafka)
+    G[Générateur de Flux] -->|"JSON (Transactions)"| K(Apache Kafka)
     K -->|Stream| D[Détecteur Hybride]
-    D -->|IA + Règles| E[Moteur d'Analyse]
-    E -->|Alertes Qualifiées| DB[(Base SQLite)]
+    D -->|"IA + Règles"| E[Moteur d'Analyse]
+    E -->|"Alertes Qualifiées"| DB[(Base SQLite)]
     DB -->|Visualisation| S[Dashboard Streamlit]
 ```
 
