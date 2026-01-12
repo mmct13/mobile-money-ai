@@ -1,17 +1,34 @@
 # 🛡️ MoneyShield CI
-### Plateforme Intelligente de Protection Anti-Fraude Mobile Money (Côte d'Ivoire)
+### Intelligence Artificielle de Lutte Anti-Fraude Mobile Money (Côte d'Ivoire)
 
-**MoneyShield CI** est une solution de pointe utilisant l'Intelligence Artificielle pour détecter et prévenir la fraude sur les réseaux Mobile Money en temps réel. Adaptée spécifiquement au contexte ivoirien, elle surveille les flux de transactions et identifie les comportements suspects tels que le broutage, le SIM swap et l'ingénierie sociale.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red?logo=streamlit)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-Streaming-black?logo=apachekafka)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
+
+**MoneyShield CI** est une plateforme de sécurité avancée conçue pour protéger l'écosystème Mobile Money en Côte d'Ivoire. Elle combine **l'Intelligence Artificielle (Isolation Forest)** et un **moteur de règles expertes** pour détecter, classifier et bloquer les transactions frauduleuses en temps réel.
+
+---
+
+## 🎯 Problématique & Solution
+
+Le marché ivoirien du Mobile Money fait face à des menaces spécifiques et évolutives : "Broutage", Arnaques aux faux frais, SIM Swap, et Blanchiment d'argent dans les zones rurales.
+
+**MoneyShield CI répond par une approche hybride :**
+1.  **Détection d'Anomalies (IA)** : Repère les comportements atypiques inconnus.
+2.  **Classification Expert (Règles)** : Identifie précisément le *type* de fraude selon le contexte local (Villes, Opérateurs, Comportement).
 
 ---
 
 ## 🚀 Fonctionnalités Clés
 
-- **Détection IA Temps Réel** : Modèle *Isolation Forest* entraîné sur plus de 20 000 transactions types.
-- **Classification des Fraudes** : Identification automatique des motifs (Broutage, Blanchiment, SIM Swap, etc.).
-- **Dashboard Premium** : Interface Streamlit moderne avec cartographie des menaces et KPIs financiers.
-- **Architecture Scalable** : Pipeline de données basé sur **Apache Kafka** pour une analyse à flux continu.
-- **Contexte Local** : Support complet des opérateurs (Orange, MTN, Moov, Wave) et des 20 plus grandes communes/villes de CI.
+-   **⏱️ Détection Temps Réel** : Analyse instantanée des flux de transactions via Apache Kafka.
+-   **🧠 Classification Hybride** :
+    -   *IA* : Score d'anomalie (-1 à 1).
+    -   *Règles* : Score de confiance (0% à 100%) pour catégoriser la menace.
+-   **📊 Dashboard Décisionnel** : Interface Streamlit pour visualiser les alertes, la répartition géographique et les KPIs.
+-   **🇨🇮 Contexte Local** : Support des opérateurs (Orange, MTN, Moov, Wave) et géolocalisation ivoirienne (Abidjan, Bouaké, Soubré, etc.).
+-   **🛡️ Gestion Complète** : Scripts d'automatisation pour le démarrage, l'arrêt, et la maintenance de la base de données.
 
 ---
 
@@ -19,66 +36,105 @@
 
 ```mermaid
 graph LR
-    G[Générateur de Flux] -->|JSON| K(Apache Kafka)
-    K -->|Stream| D[Détecteur IA]
-    D -->|Alertes| J[Base JSON]
-    J -->|Visualisation| S[Dashboard Streamlit]
+    G[Générateur de Flux] -->|JSON (Transactions)| K(Apache Kafka)
+    K -->|Stream| D[Détecteur Hybride]
+    D -->|IA + Règles| E[Moteur d'Analyse]
+    E -->|Alertes Qualifiées| DB[(Base SQLite)]
+    DB -->|Visualisation| S[Dashboard Streamlit]
 ```
 
 ---
 
-## 🔧 Installation & Configuration
+## 🔧 Installation
 
 ### Prérequis
-- Python 3.10+
-- Docker & Docker-Compose (pour Kafka)
-- Environnement virtuel (recommandé)
+-   **Docker Desktop** (pour Kafka/Zookeeper)
+-   **Python 3.10+**
 
-### Configuration rapide
-1. **Initialiser l'environnement** :
-   ```bash
-   python -m venv .venv
-   .\.venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. **Démarrer les services infrastructure** :
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Entraîner le modèle** (si nécessaire) :
-   ```bash
-   .\.venv\Scripts\python.exe app/detector/entrainement.py
-   ```
+### Configuration
+1.  **Cloner le projet**
+2.  **Créer l'environnement virtuel** :
+    ```bash
+    python -m venv .venv
+    .\.venv\Scripts\activate
+    ```
+3.  **Installer les dépendances** :
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ---
 
-## 🎮 Utilisation
+## 🎮 Utilisation Simplifiée
 
-Pour simplifier l'usage, des scripts automatisés sont disponibles à la racine :
+Le projet inclut une suite de scripts `.bat` à la racine pour faciliter l'orchestration.
 
-- **`start_app.bat`** : Lance l'ensemble de la suite (Générateur, Détecteur, Dashboard).
-- **`stop_app.bat`** : Arrête proprement tous les services et conteneurs.
+### 🟢 Démarrer l'Application
+Lancez **`start_app.bat`**. Ce script va automatiquement :
+1.  Démarrer les conteneurs Docker (Kafka).
+2.  Lancer le Générateur de transactions.
+3.  Lancer le Détecteur de fraudes.
+4.  Ouvrir le Dashboard dans votre navigateur.
 
-### Simulation de Scénarios
-Le générateur simule 10 types de fraudes avancées :
-- **Broutage** : Transactions nocturnes massives.
-- **SIM Swap** : Prise de contrôle de compte via USSD/Agent.
-- **Blanchiment** : Flux financiers atypiques en zones rurales (ex: Soubré).
-- **Ingénierie Sociale** : Arnaques par SMS/Appels.
+### 🔴 Arrêter l'Application
+Lancez **`stop_app.bat`**.
+*   Arrête proprement tous les processus Python.
+*   Stoppe les conteneurs Docker.
+
+### 🛠️ Outils de Maintenance
+-   **`clean_db.bat`** : ⚠️ Vide la base de données des alertes (utile pour repartir à zéro avant une démo).
+-   **`view_database.bat`** : Affiche le contenu brut de la base de données dans le terminal.
+-   **`run_tests.bat`** : Exécute la suite de tests unitaires (notamment pour le classificateur).
+-   **`diagnostic.bat`** : Vérifie l'état du système (Docker, Python, Kafka).
+
+---
+
+## 🕵️‍♂️ Types de Fraudes Détectées
+
+Le système identifie 7 types de menaces majeures (détails dans [`CLASSIFICATION_FRAUDE.md`](CLASSIFICATION_FRAUDE.md)) :
+
+| Type | Priorité | Description |
+| :--- | :--- | :--- |
+| **SIM Swap** | 🔴 Haute | Prise de contrôle du compte via changement de SIM. |
+| **Blanchiment** | 🔴 Haute | Flux massifs atypiques, souvent en zones rurales. |
+| **Broutage** | 🟠 Moyenne | Cybercriminalité nocturne, extorsion. |
+| **Schtroumpfage** | 🟠 Moyenne | Accumulation de petits montants pour éviter les seuils. |
+| **Vélocité** | 🟠 Moyenne | Répétition anormale de transactions rapides. |
+| **Ingénierie Sociale** | 🟡 Faible | Arnaques par manipulation (Phishing/Vishing). |
+| **Vol Physique** | 🟡 Faible | Retraits rapides après vol de téléphone. |
+
+---
+
+## 🎭 Scénarios de Démo
+
+Exemples de scénarios simulés par le générateur (détails dans [`scenario.md`](scenario.md)) :
+
+> **Le "Brouteur" de Yopougon**
+> *   **Contexte** : 3h du matin, Yopougon.
+> *   **Action** : Transfert de 500k vers Wave via App.
+> *   **Détection** : `Broutage` (Score confiance : 92%).
+
+> **Le "Gbaka" de Blanchiment**
+> *   **Contexte** : Soubré, compte dormant.
+> *   **Action** : Dépôt massif de 5M FCFA suivi d'un retrait immédiat.
+> *   **Détection** : `Blanchiment` (Score confiance : 80%).
 
 ---
 
 ## 📁 Structure du Projet
 
-- `app/dashboard/` : Application Streamlit et base de données des alertes.
-- `app/detector/` : Modèle IA et logique de détection en temps réel.
-- `app/generator/` : Simulateur de transactions ivoiriennes réalistes.
-- `docker-compose.yml` : Configuration Kafka/Zookeeper.
+```
+mobile-money-ai/
+├── app/
+│   ├── dashboard/      # Interface Streamlit (app.py)
+│   ├── detector/       # Moteur IA & Règles (detecteur.py, classificateur_fraude.py)
+│   └── generator/      # Simulation (generate_transactions.py)
+├── *.bat               # Scripts d'automatisation (start, stop, clean, etc.)
+├── CLASSIFICATION_FRAUDE.md # Documentation détaillée des règles
+├── scenario.md         # Description des scénarios de test
+├── moneyshield.db      # Base de données SQLite
+└── docker-compose.yml  # Infrastructure Kafka
+```
 
 ---
 
-## 🛡️ À propos
-Développé pour sécuriser l'écosystème numérique en Côte d'Ivoire. 
-**Sécurité. Transparence. Rapidité.**
