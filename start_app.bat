@@ -57,6 +57,17 @@ if not exist ".venv" (
 )
 echo.
 
+REM --- ETAPE 2.5 : BASE DE DONNEES ---
+echo [2.5/5] Verification de la Base de Donnees
+
+.venv\Scripts\python.exe init_db.py
+if !ERRORLEVEL! NEQ 0 (
+    echo [ERREUR] Impossible de creer/verifier la base de donnees.
+    pause
+    exit /b 1
+)
+echo.
+
 REM --- ETAPE 3 : MODELE IA ---
 echo [3/5] Verification du Modele IA
 

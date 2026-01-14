@@ -24,19 +24,19 @@ def charger_modele():
     """Charge le modèle IA de détection de fraude."""
     if not os.path.exists(FICHIER_MODELE):
         print("\n" + "=" * 60)
-        print("❌ ERREUR: Modèle IA introuvable")
-        print(f"📂 Chemin attendu: {FICHIER_MODELE}")
-        print("\n💡 Solution:")
+        print("[ERROR] Modele IA introuvable")
+        print(f"Chemin attendu: {FICHIER_MODELE}")
+        print("\n[TIP] Solution:")
         print("   python -m app.detector.entrainement")
         print("=" * 60 + "\n")
         exit(1)
     
     print("\n" + "=" * 60)
-    print("🛡️  MONEYSHIELD CI - Détecteur de Fraude IA")
+    print("MONEYSHIELD CI - Detecteur de Fraude IA")
     print("=" * 60)
-    print("🧠 Chargement du modèle IA v3.1 (Classification Intelligente)...")
+    print("[INFO] Chargement du modele IA v3.1 (Classification Intelligente)...")
     model = joblib.load(FICHIER_MODELE)
-    print("✅ Modèle chargé avec succès")
+    print("[SUCCESS] Modele charge avec succes")
     print("=" * 60 + "\n")
     return model
 
@@ -50,15 +50,15 @@ def main():
     
     # Initialisation du classificateur intelligent
     classificateur = ClassificateurFraude()
-    print("🎯 Classificateur de fraude intelligent initialisé")
-    print("   📋 9 types de fraudes détectables incluant:")
-    print("      • Vélocité Excessive (répétitions rapides)")
-    print("      • Accumulation/Schtroumpfage (structuring)")
-    print("      • Broutage, SIM Swap, Blanchiment...")
+    print("[INFO] Classificateur de fraude intelligent initialise")
+    print("   - 9 types de fraudes detectables incluant:")
+    print("      * Velocite Excessive (repetitions rapides)")
+    print("      * Accumulation/Schtroumpfage (structuring)")
+    print("      * Broutage, SIM Swap, Blanchiment...")
     print()
 
     # Initialisation Kafka
-    print(f"⏳ Connexion à Kafka sur : {KAFKA_SERVER} ...")
+    print(f"[INFO] Connexion a Kafka sur : {KAFKA_SERVER} ...")
     try:
         consumer = KafkaConsumer(
             KAFKA_TOPIC,
@@ -68,15 +68,15 @@ def main():
         )
     except Exception as e:
         print("\n" + "=" * 60)
-        print("❌ ERREUR: Connexion Kafka impossible")
-        print(f"📋 Détails: {e}")
-        print("\n💡 Vérifiez que Kafka est démarré via Docker.")
+        print("[ERROR] Connexion Kafka impossible")
+        print(f"Details: {e}")
+        print("\n[TIP] Verifiez que Kafka est demarre via Docker.")
         print("=" * 60 + "\n")
         return
 
-    print("🟢 SYSTÈME ACTIF - En écoute sur Kafka")
-    print("📊 Analyse: Montant | Heure | Ville | Type | Opérateur | Canal")
-    print("⏳ En attente de transactions...")
+    print("[SUCCESS] SYSTEME ACTIF - En ecoute sur Kafka")
+    print("ANALYSE: Montant | Heure | Ville | Type | Operateur | Canal")
+    print("[INFO] En attente de transactions...")
     print("\n" + "-" * 60 + "\n")
 
     for message in consumer:
@@ -127,32 +127,32 @@ def main():
             # 4. Logique d'affichage
             if prediction == -1:
                 print("\n" + "━" * 60)
-                print("🚨 ALERTE FRAUDE DÉTECTÉE")
+                print("[ALERT] FRAUDE DETECTEE")
                 print("━" * 60)
-                print(f"⚡ Score de risque IA: {score:.3f}")
-                print(f"💰 Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
-                print(f"📍 Lieu: {ville_str} à {heure}h")
-                print(f"📱 Opérateur: {op_str} (Canal: {canal_str})")
-                print(f"🔄 Type: {type_str}")
-                print(f"👤 Expéditeur: {transaction['expediteur']}")
+                print(f" - Score de risque IA: {score:.3f}")
+                print(f" - Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
+                print(f" - Lieu: {ville_str} a {heure}h")
+                print(f" - Operateur: {op_str} (Canal: {canal_str})")
+                print(f" - Type: {type_str}")
+                print(f" - Expediteur: {transaction['expediteur']}")
                 
                 # 4bis. Classification intelligente avec CONTEXTE
                 motif, description, confiance = classificateur.classifier(transaction, contexte)
                 
-                print(f"🧐 Motif identifié: {motif}")
-                print(f"   └─ {description}")
-                print(f"   └─ Confiance: {confiance*100:.1f}%")
-                print("🛡️  MoneyShield CI - Alerte enregistrée en BDD")
+                print(f" - Motif identifie: {motif}")
+                print(f"   Details: {description}")
+                print(f"   Confiance: {confiance*100:.1f}%")
+                print("[INFO] Alerte enregistree en BDD")
                 print("━" * 60 + "\n")
                 
                 # APPEL DE LA NOUVELLE FONCTION DE SAUVEGARDE SQL
                 sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance)
             else:
                 # Transaction normale
-                print(f"✅ Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
+                print(f"[INFO] Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
 
         except Exception as e:
-            print(f"⚠️  Erreur de traitement: {e}")
+            print(f"[ERROR] Erreur de traitement: {e}")
 
 
 

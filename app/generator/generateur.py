@@ -24,19 +24,19 @@ OPERATEURS = list(MAP_OPERATEURS.keys())
 
 def init_kafka_producer():
     """Initialise le producteur Kafka."""
-    print(f"⏳ Connexion à Kafka sur : {KAFKA_SERVER} ...")
+    print(f"[INFO] Connexion a Kafka sur : {KAFKA_SERVER} ...")
     try:
         producer = KafkaProducer(
             bootstrap_servers=[KAFKA_SERVER],
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
-        print(f"✅ Connecté avec succès à Kafka")
+        print(f"[SUCCESS] Connecte avec succes a Kafka")
         return producer
     except Exception as e:
         print("\n" + "=" * 60)
-        print("❌ ERREUR: Connexion Kafka impossible")
-        print(f"📋 Détails: {e}")
-        print("\n💡 Vérifiez que Kafka est démarré via Docker.")
+        print("[ERROR] Connexion Kafka impossible")
+        print(f"Details: {e}")
+        print("\n[TIP] Verifiez que Kafka est demarre via Docker.")
         print("=" * 60 + "\n")
         return None
 
@@ -152,41 +152,41 @@ def generer_transaction():
 
 def main():
     print("\n" + "=" * 60)
-    print("🛡️  MONEYSHIELD CI - Générateur de Transactions")
+    print("MONEYSHIELD CI - Generateur de Transactions")
     print("=" * 60)
     
     producer = init_kafka_producer()
     if not producer:
         return
 
-    print("\n🟢 GÉNÉRATEUR ACTIF")
-    print("📊 Simulation: Transactions Mobile Money CI")
-    print("📍 Villes: 20 localités ivoiriennes")
-    print("📱 Opérateurs: Orange Money | MTN MoMo | Moov Money | Wave")
-    print("\n💡 Appuyez sur CTRL+C pour arrêter")
+    print("\n[SUCCESS] GENERATEUR ACTIF")
+    print("Simulation: Transactions Mobile Money CI")
+    print("- Villes: 20 localites ivoiriennes")
+    print("- Operateurs: Orange Money | MTN MoMo | Moov Money | Wave")
+    print("\n[TIP] Appuyez sur CTRL+C pour arreter")
     print("-" * 60 + "\n")
 
     compteur = 0
     try:
         while True:
-            # 1. Générer la donnée
+            # 1. Generer la donnee
             transaction = generer_transaction()
 
-            # 2. Envoyer à Kafka
+            # 2. Envoyer a Kafka
             producer.send(KAFKA_TOPIC, transaction)
             compteur += 1
 
-            # Affichage console amélioré
-            print(f"📤 #{compteur:04d} | {transaction['operateur']:15s} | {transaction['expediteur']} → {transaction['montant']:>8,} F | {transaction['ville']}".replace(",", " "))
+            # Affichage console ameliore
+            print(f"[INFO] #{compteur:04d} | {transaction['operateur']:15s} | {transaction['expediteur']} -> {transaction['montant']:>8,} F | {transaction['ville']}".replace(",", " "))
 
-            # Pause aléatoire
+            # Pause aleatoire
             time.sleep(random.uniform(0.1, 2.0))
 
     except KeyboardInterrupt:
         print("\n" + "=" * 60)
-        print("🛑 ARRÊT DU GÉNÉRATEUR")
-        print(f"📊 Total généré: {compteur} transactions")
-        print("✅ Fermeture propre de Kafka...")
+        print("[STOP] ARRET DU GENERATEUR")
+        print(f"Total genere: {compteur} transactions")
+        print("[INFO] Fermeture propre de Kafka...")
         producer.close()
         print("=" * 60 + "\n")
 
