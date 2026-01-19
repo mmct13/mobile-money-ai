@@ -26,7 +26,9 @@ Le marché ivoirien du Mobile Money fait face à des menaces spécifiques et év
 -   **🧠 Classification Hybride** :
     -   *IA* : Score d'anomalie (-1 à 1).
     -   *Règles* : Score de confiance (0% à 100%) pour catégoriser la menace.
--   **📊 Dashboard Décisionnel** : Interface Streamlit pour visualiser les alertes, la répartition géographique et les KPIs.
+-   **📊 Dashboard & Finance** :
+    -   *Sécurité* : Visualisation des alertes et **Cartographie Interactive** (Zones sensibles).
+    -   *Finance* : Suivi des volumes financiers, panier moyen et **prévisions IA**.
 -   **🇨🇮 Contexte Local** : Support des opérateurs (Orange, MTN, Moov, Wave) et géolocalisation ivoirienne (Abidjan, Bouaké, Soubré, etc.).
 -   **🛡️ Gestion Complète** : Scripts d'automatisation pour le démarrage, l'arrêt, et la maintenance de la base de données.
 
@@ -40,7 +42,7 @@ graph LR
     K -->|Stream| D[Détecteur Hybride]
     D -->|"IA + Règles"| E[Moteur d'Analyse]
     E -->|"Alertes Qualifiées"| DB[(Base SQLite)]
-    DB -->|Visualisation| S[Dashboard Streamlit]
+    DB -->|Visualisation + Map| S[Dashboard Streamlit]
 ```
 
 ---

@@ -95,11 +95,23 @@ echo [4/5] Lancement des conteneurs Docker
 echo    - Arret des anciens conteneurs potentiels...
 docker-compose down >nul 2>&1
 
-echo    - Demarrage de l'infrastructure (Kafka, Zookeeper, App)...
-docker-compose up -d --build
+echo    - Demarrage des services (hors detecteur)...
+docker-compose up -d --build zookeeper kafka generator dashboard
 
 if !ERRORLEVEL! NEQ 0 (
-    echo [ERREUR] Impossible de lancer les services Docker.
+    echo [ERREUR] Impossible de lancer les services de base.
+    pause
+    exit /b 1
+)
+
+echo    - Attente de la stabilisation (5s)...
+timeout /t 5 /nobreak > nul
+
+echo    - Demarrage du DETECTEUR (en dernier)...
+docker-compose up -d --build detector
+
+if !ERRORLEVEL! NEQ 0 (
+    echo [ERREUR] Impossible de lancer le detecteur.
     echo Verifiez les logs avec : docker-compose logs
     pause
     exit /b 1

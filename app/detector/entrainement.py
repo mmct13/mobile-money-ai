@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import RandomForestClassifier
 import joblib
 import random
 from faker import Faker
@@ -10,12 +10,12 @@ from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
 FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
-NB_TRANSACTIONS = 50000  # Encore plus de données pour la précision
+NB_TRANSACTIONS = 50000
 
 fake = Faker('fr_FR')
 
 def generer_donnees_historiques():
-    """Génère des données avec contexte enrichi (Communes, Canaux)."""
+    """Génère des données avec contexte enrichi (Communes, Canaux) et labels."""
     data = []
 
     for _ in range(NB_TRANSACTIONS):
@@ -31,6 +31,8 @@ def generer_donnees_historiques():
             # Orange/MTN/Moov : Beaucoup d'USSD
             canal = random.choice(["USSD", "APP", "AGENT"])
 
+        is_fraude = 0 # Par défaut : Normal
+
         # 96% de transactions normales
         if random.random() < 0.96:
             montant = random.randint(500, 75000)
@@ -39,9 +41,12 @@ def generer_donnees_historiques():
             # Ajustement Canal Normal
             if type_trans == "DEPOT" or type_trans == "RETRAIT":
                  canal = "AGENT" # En général fait en kiosque
+            
+            is_fraude = 0
 
         else:
             # 4% d'anomalies (Scénarios Avancés MoneyShield CI)
+            is_fraude = 1
             scenario = random.choice([
                 "BROUTAGE", "SOCIAL_ENG", "FAUX_NUMERO", "LOTERIE", 
                 "FAUX_FRAIS", "SIM_SWAP", "BLANCHIMENT", "SOCIAL_MEDIA", 
@@ -118,7 +123,8 @@ def generer_donnees_historiques():
             "type": type_trans,
             "heure": heure,
             "operateur": operateur,
-            "canal": canal
+            "canal": canal,
+            "is_fraude": is_fraude
         })
 
     return pd.DataFrame(data)
@@ -133,38 +139,43 @@ def preparer_features(df):
     df_encoded['operateur_code'] = df_encoded['operateur'].map(MAP_OPERATEURS)
     df_encoded['canal_code'] = df_encoded['canal'].map(MAP_CANAUX)
 
-    # 6 Features maintenant (+ Canal)
-    return df_encoded[["montant", "heure", "ville_code", "type_code", "operateur_code", "canal_code"]]
+    # Features (X) et Target (y)
+    X = df_encoded[["montant", "heure", "ville_code", "type_code", "operateur_code", "canal_code"]]
+    y = df_encoded["is_fraude"]
+    
+    return X, y
 
 
 def main():
     print("\n" + "=" * 60)
-    print("[INFO] MONEYSHIELD CI - Entrainement du Modele IA")
+    print("[INFO] MONEYSHIELD CI - Entrainement du Modele SUPERVISE")
     print("=" * 60)
-    print("\n[INFO] Phase 1: Generation du dataset")
+    print("\n[INFO] Phase 1: Generation du dataset (Labelisé)")
     print("   - Villes: 20 localites ivoiriennes (Abidjan detaille)")
     print("   - Canaux: USSD | APP | CARTE | AGENT")
-    print("   - Scenarios de fraude: 5 types (Brouteur, Blanchiment...)")
+    print("   - Scenarios: Normal (0) vs Fraude (1)")
     print(f"   - Volume: {NB_TRANSACTIONS:,} transactions".replace(",", " "))
     print("\n[INFO] Generation en cours...")
     df = generer_donnees_historiques()
+    ts_fraude = df['is_fraude'].sum()
     print(f"[SUCCESS] Dataset genere: {len(df):,} transactions".replace(",", " "))
+    print(f"   - Normales : {len(df) - ts_fraude:,}")
+    print(f"   - Fraudes  : {ts_fraude:,} ({(ts_fraude/len(df))*100:.1f}%)")
 
-    print("\n[INFO] Phase 2: Entrainement du modele")
-    print("   - Algorithme: Isolation Forest")
-    print("   - Features: 6 dimensions (Montant, Heure, Ville, Type, Operateur, Canal)")
-    print("   - Contamination: 4%")
-    print("   - Estimateurs: 250 arbres")
+    print("\n[INFO] Phase 2: Entrainement Random Forest")
+    print("   - Algorithme: RandomForestClassifier")
+    print("   - Features: 6 dimensions")
+    print("   - Arbres: 100")
     print("\n[INFO] Entrainement en cours...")
-    X = preparer_features(df)
+    X, y = preparer_features(df)
 
-    model = IsolationForest(n_estimators=250, contamination=0.04, random_state=42, n_jobs=-1)
-    model.fit(X)
+    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1, class_weight='balanced')
+    model.fit(X, y)
     print("[SUCCESS] Modele entraine avec succes")
 
     print("\n[INFO] Phase 3: Sauvegarde du modele")
     joblib.dump(model, FICHIER_MODELE)
-    print(f"[SUCCESS] Modele v3.0 sauvegarde: {FICHIER_MODELE}")
+    print(f"[SUCCESS] Modele SUPERVISE sauvegarde: {FICHIER_MODELE}")
     
     print("\n" + "=" * 60)
     print("ENTRAINEMENT TERMINE AVEC SUCCES")

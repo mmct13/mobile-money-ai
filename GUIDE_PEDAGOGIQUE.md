@@ -64,14 +64,21 @@ Il calcule le score pour chaque règle. Celle qui a le plus grand score gagne.
 
 Une fois identifié, il sauvegarde tout dans la Base de Données (`moneyshield.db`).
 
+### D. Le Module Financier
+Le système enregistre désormais **toutes** les transactions (et pas seulement les fraudes) dans une table dédiée. Cela nous permet de faire deux choses passionnantes :
+1.  **Calculer les Volumes** : Savoir combien d'argent circule réellement.
+2.  **Prédire l'Avenir** : Utiliser une régression linéaire simple pour estimer le volume des prochaines 24 heures.
+
 ## 4. 📊 L'Écran de Contrôle : Le Dashboard (`app/dashboard/dashboard.py`)
 *C'est la télé pour les humains.*
 
 C'est une interface web créée avec **Streamlit** (très facile pour faire des sites de data en Python).
 *   Il lit la base de données `moneyshield.db`.
-*   Il affiche les alertes en temps réel.
+*   Il affiche les alertes en temps réel (Page Sécurité).
+*   **NOUVEAU** : Il montre une **carte interactive de la Côte d'Ivoire** avec des bulles rouges pour identifier les zones critiques.
+*   Il affiche les tendances financières et les prévisions (Page Finance).
 *   Il dessine des graphiques (Camemberts, Courbes) pour montrer l'évolution de la fraude.
-*   Il se rafraîchit automatiquement pour montrer les nouvelles alertes qui viennent d'être détectées par l'inspecteur.
+*   Il se rafraîchit automatiquement pour montrer les nouvelles données.
 
 ---
 

@@ -114,3 +114,21 @@ Un utilisateur envoie **15 transferts** de 100 FCFA à la suite vers le même nu
 ### 🛡️ Réaction du Système
 > 🛑 **TEMPORISATION** : Compte temporairement restreint d'envoi.
 > **Raison :** Comportement robotique ou abusif.
+
+---
+
+## 7. La Prévision de Trésorerie (Use Case Business)
+**Fonctionnalité :** `Dashboard Financier`
+**Objectif :** Anticipation de liquidités
+
+### 📖 L'Histoire
+Le **Directeur Financier** de la banque partenaire souhaite savoir combien de liquidités doivent être mises à disposition des agents pour le week-end de Pâques à venir. Il consulte le nouveau Dashboard.
+
+### ⚙️ Ce que MoneyShield voit (Backend)
+- **Historique :** Analyse des volumes horaires des 7 derniers jours.
+- **Tendance :** Le modèle de régression linéaire détecte une hausse progressive de 15% des volumes chaque vendredi soir.
+
+### 🛡️ Apport du Système
+> 📈 **PRÉVISION IA** : Courbe prédictive affichée sur 24h.
+> **Insight :** Le système prévoit un pic de volume à **200 Millions FCFA** demain à 18h.
+> **Action :** Provisionnement anticipé des comptes Master-Agent pour éviter les pénuries de cash (e-money).

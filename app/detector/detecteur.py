@@ -114,9 +114,13 @@ def main():
                 "canal_code": canal_code
             }])
 
-            # 3. Prédiction
+            # 3. Prédiction (Random Forest)
+            # 0 = Normal, 1 = Fraude
             prediction = model.predict(features)[0] 
-            score = model.decision_function(features)[0]
+            
+            # Probabilité de fraude (Classe 1)
+            # predict_proba renvoie [[prob_0, prob_1]]
+            proba_fraude = model.predict_proba(features)[0][1]
             
             # --- CONTEXTE POUR CLASSIFICATION ---
             contexte = {
@@ -125,11 +129,11 @@ def main():
             }
 
             # 4. Logique d'affichage
-            if prediction == -1:
+            if prediction == 1:
                 print("\n" + "━" * 60)
                 print("[ALERT] FRAUDE DETECTEE")
                 print("━" * 60)
-                print(f" - Score de risque IA: {score:.3f}")
+                print(f" - Probabilite Fraude: {proba_fraude*100:.1f}%")
                 print(f" - Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
                 print(f" - Lieu: {ville_str} a {heure}h")
                 print(f" - Operateur: {op_str} (Canal: {canal_str})")
@@ -137,22 +141,34 @@ def main():
                 print(f" - Expediteur: {transaction['expediteur']}")
                 
                 # 4bis. Classification intelligente avec CONTEXTE
-                motif, description, confiance = classificateur.classifier(transaction, contexte)
+                motif, description, confiance_regles = classificateur.classifier(transaction, contexte)
+                
+                # On combine la confiance IA et Règles
+                # Si l'IA est très sûre, ça renforce
+                confiance_globale = (proba_fraude + confiance_regles) / 2
                 
                 print(f" - Motif identifie: {motif}")
                 print(f"   Details: {description}")
-                print(f"   Confiance: {confiance*100:.1f}%")
+                print(f"   Confiance Globale: {confiance_globale*100:.1f}%")
                 print("[INFO] Alerte enregistree en BDD")
                 print("━" * 60 + "\n")
                 
                 # APPEL DE LA NOUVELLE FONCTION DE SAUVEGARDE SQL
-                sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance)
+                # On passe proba_fraude comme score
+                sauvegarder_alerte(transaction, proba_fraude, type_str, ville_str, motif, confiance_globale)
             else:
                 # Transaction normale
                 print(f"[INFO] Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
 
         except Exception as e:
             print(f"[ERROR] Erreur de traitement: {e}")
+        
+        # 5. Sauvegarde SYSTÉMATIQUE de toutes les transactions pour le Dashboard Financier
+        try:
+            sauvegarder_transaction(transaction)
+        except Exception as e:
+             # On ne veut pas bloquer le procesus pour ça
+            pass
 
 
 
@@ -189,6 +205,40 @@ def sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance
         
     except Exception as e:
         print(f"⚠️ Erreur lors de l'écriture en base de données: {e}")
+
+
+def sauvegarder_transaction(transaction):
+    """Sauvegarde toutes les transactions pour le dashboard financier."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        sql = '''
+            INSERT INTO transactions 
+            (transaction_id, timestamp, date_heure, montant, expediteur, destinataire, ville, operateur, canal, type_trans)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        
+        valeurs = (
+            transaction.get('transaction_id', 'N/A'),
+            time.time(),
+            transaction['date_heure'],
+            transaction['montant'],
+            transaction.get('expediteur', 'N/A'),
+            transaction.get('destinataire', 'N/A'),
+            transaction.get('ville', 'N/A'),
+            transaction['operateur'],
+            transaction.get('canal', 'INCONNU'),
+            transaction.get('type_transaction', 'N/A')
+        )
+        
+        cursor.execute(sql, valeurs)
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        # En prod, logger silencieusement ou dans un fichier de log
+        print(f"[DB ERROR] Save Transaction: {e}")
 
 
 if __name__ == "__main__":

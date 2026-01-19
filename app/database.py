@@ -21,6 +21,22 @@ def init_db():
             confiance REAL DEFAULT 0.0
         )
     ''')
+    
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id TEXT,
+            timestamp REAL,
+            date_heure TEXT,
+            montant INTEGER,
+            expediteur TEXT,
+            destinataire TEXT,
+            ville TEXT,
+            operateur TEXT,
+            canal TEXT,
+            type_trans TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
