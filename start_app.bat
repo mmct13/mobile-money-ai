@@ -52,8 +52,11 @@ if not exist ".venv" (
         exit /b 1
     )
     echo    - Dependances installees.
+    echo    - Dependances installees.
 ) else (
     echo    - Environnement virtuel existant detecte.
+    echo    - Mise a jour des dependances...
+    .venv\Scripts\python.exe -m pip install -r requirements.txt >nul 2>&1
 )
 echo.
 
@@ -96,7 +99,7 @@ echo    - Arret des anciens conteneurs potentiels...
 docker-compose down >nul 2>&1
 
 echo    - Demarrage des services (hors detecteur)...
-docker-compose up -d --build zookeeper kafka generator dashboard
+docker-compose up -d --build zookeeper kafka generator dashboard api
 
 if !ERRORLEVEL! NEQ 0 (
     echo [ERREUR] Impossible de lancer les services de base.
@@ -135,8 +138,11 @@ echo    - Infrastructure (Kafka/Zookeeper) : EN LIGNE
 echo    - Detection Fraude (IA)            : EN LIGNE
 echo    - Generateur Transactions          : EN LIGNE
 echo    - Tableau de Bord                  : EN LIGNE
+echo    - API REST                         : EN LIGNE
 echo.
-echo    ACCES : http://localhost:8501
+echo    ACCES : 
+echo    - Dashboard : http://localhost:8501
+echo    - API Docs  : http://localhost:8000/docs
 echo.
 echo ===============================================================================
 

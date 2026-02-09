@@ -440,8 +440,19 @@ def show_security_dashboard():
         )
 
 def show_financial_dashboard():
+    # --- EN-TÊTE & CONTEXTE ---
     st.markdown("# <i class='bi bi-graph-up-arrow custom-icon'></i>Dashboard Financier", unsafe_allow_html=True)
     st.markdown("<h4 style='color: #6C757D;'>Analyse des Volumes et Prévisions</h4>", unsafe_allow_html=True)
+    
+    # Texte explicatif simple pour non-techniciens
+    st.markdown("""
+    <div style='background-color: #e9ecef; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <strong>💡 À quoi sert cette page ?</strong><br>
+        Cette section vous permet de suivre l'évolution financière des transactions mobile money. 
+        Elle utilise l'intelligence artificielle pour anticiper les volumes futurs et identifier les périodes de forte activité.
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
 
     df = charger_transactions()
@@ -450,115 +461,316 @@ def show_financial_dashboard():
         st.info("En attente de transactions financières... (Le détecteur doit tourner)")
         return
 
-    # Conversion de date_heure
-    df['date'] = pd.to_datetime(df['date_heure'])
+    # Conversion de date_heure (Supporte les formats mixtes avec/sans microsecondes)
+    df['date'] = pd.to_datetime(df['date_heure'], format='mixed')
     
-    # KPIs Financiers
+    # --- 1. INDICATEURS CLES (KPIs) ---
+    st.markdown("### <i class='bi bi-speedometer2 custom-icon'></i> Performance Globale", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     
     total_volume = df['montant'].sum()
     nb_trans = len(df)
     avg_ticket = df['montant'].mean() if nb_trans > 0 else 0
     
-    col1.metric("💰 Volume Total", f"{total_volume:,.0f} F".replace(",", " "))
-    col2.metric("💳 Nombre de Transactions", f"{nb_trans:.0f}")
-    col3.metric("🏷️ Panier Moyen", f"{avg_ticket:,.0f} F".replace(",", " "))
+    col1.metric("💰 Volume Total", f"{total_volume:,.0f} F".replace(",", " "), delta_color="normal", help="Montant total des transactions traitées")
+    col2.metric("💳 Nombre de Transactions", f"{nb_trans:.0f}", help="Nombre total d'opérations enregistrées")
+    col3.metric("🏷️ Panier Moyen", f"{avg_ticket:,.0f} F".replace(",", " "), help="Montant moyen d'une transaction")
     
-    st.markdown("### <i class='bi bi-bezier2 custom-icon'></i> Tendances & Prévisions", unsafe_allow_html=True)
+    st.markdown("---")
+
+    # --- 2. ANALYSE TEMPORELLE (HEATMAP) ---
+    c_heat, c_area = st.columns([1, 1])
+    
+    with c_heat:
+        st.markdown("### <i class='bi bi-grid-3x3-gap-fill custom-icon'></i> Heures de Pointe", unsafe_allow_html=True)
+        st.caption("Quand ont lieu le plus de transactions ?")
+        
+        if not df.empty:
+            df['hour'] = df['date'].dt.hour
+            df['day'] = df['date'].dt.day_name()
+            # Ordre des jours
+            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            df['day'] = pd.Categorical(df['day'], categories=days_order, ordered=True)
+            
+            df_heat = df.groupby(['day', 'hour']).size().reset_index(name='count')
+            
+            fig_heat = px.density_heatmap(
+                df_heat, 
+                x='hour', 
+                y='day', 
+                z='count', 
+                color_continuous_scale='Greens',
+                labels={'day': 'Jour', 'hour': 'Heure', 'count': 'Volume'},
+                title="Intensité des Transactions"
+            )
+            fig_heat.update_layout(height=400, margin=dict(t=30, l=0, r=0, b=0))
+            st.plotly_chart(fig_heat, use_container_width=True)
+            
+            st.markdown("""
+            <small style='color: #6c757d;'>
+            🟥 <b>Lecture :</b> Les zones les plus foncées indiquent les moments de forte affluence. 
+            Utilisez ces infos pour prévoir les pics de charge.
+            </small>
+            """, unsafe_allow_html=True)
+
+    # --- 3. PARTS DE MARCHE (STACKED AREA) ---
+    with c_area:
+        st.markdown("### <i class='bi bi-layers-fill custom-icon'></i> Parts de Marché", unsafe_allow_html=True)
+        st.caption("Évolution des volumes par opérateur")
+        
+        # Agrégation par heure et opérateur
+        df_ops = df.set_index('date').groupby([pd.Grouper(freq='h'), 'operateur'])['montant'].sum().reset_index()
+        
+        if not df_ops.empty:
+            fig_area = px.area(
+                df_ops, 
+                x='date', 
+                y='montant', 
+                color='operateur',
+                color_discrete_map=COULEURS_OPS,
+                labels={'montant': 'Volume (FCFA)', 'date': 'Temps'},
+                title="Volume par Opérateur au fil du temps"
+            )
+            fig_area.update_layout(height=400, margin=dict(t=30, l=0, r=0, b=0), showlegend=True, legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(fig_area, use_container_width=True)
+            
+            st.markdown("""
+            <small style='color: #6c757d;'>
+            🟦 <b>Lecture :</b> Ce graphique montre la contribution de chaque opérateur au volume total. 
+            Idéal pour comparer la performance de Orange, MTN, Moov et Wave.
+            </small>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # --- 4. PREVISIONS IA ---
+    st.markdown("### <i class='bi bi-check-circle-fill custom-icon'></i> Prévisions Futures (IA)", unsafe_allow_html=True)
     
     # Agrégation par heure pour les courbes
     df_hourly = df.set_index('date').resample('h')['montant'].sum().reset_index()
     
-    if len(df_hourly) > 24: # Besoin d'un peu plus d'historique pour le LAG
-        # --- PRÉVISIONS AVANCÉES (Random Forest + Time Series Features) ---
-        
-        # 1. Feature Engineering
-        df_ml = df_hourly.copy()
-        df_ml['hour'] = df_ml['date'].dt.hour
-        df_ml['dayofweek'] = df_ml['date'].dt.dayofweek
-        # Lag 1 : Montant de l'heure précédente (Très prédictif)
-        df_ml['lag_1'] = df_ml['montant'].shift(1)
-        
-        # On supprime les NaN créés par le lag
-        df_ml = df_ml.dropna()
-        
-        if len(df_ml) > 10:
+    # --- LOGIQUE DE STABILISATION ---
+    # Pour éviter que les prévisions changent à chaque refresh (5s), 
+    # on n'entraîne le modèle que sur les HEURES COMPLÈTES passées.
+    # L'heure courante (en cours) est exclue de l'entraînement car incomplète.
+    
+    current_time = pd.Timestamp.now()
+    last_full_hour = current_time.floor('h') - pd.Timedelta(hours=1)
+    
+    # Données d'entraînement : jusqu'à la dernière heure complète
+    df_train = df_hourly[df_hourly['date'] <= last_full_hour].copy()
+    
+    if len(df_train) > 24: 
+        # --- FONCTION CACHÉE (Pour la performance et la stabilité) ---
+        @st.cache_data(ttl=300) # Cache valide 5 minutes
+        def predict_future_volumes(df_history):
+            # 1. Feature Engineering
+            df_ml = df_history.copy()
+            df_ml['hour'] = df_ml['date'].dt.hour
+            df_ml['dayofweek'] = df_ml['date'].dt.dayofweek
+            df_ml['lag_1'] = df_ml['montant'].shift(1)
+            df_ml = df_ml.dropna()
+            
+            if len(df_ml) < 10: return None, None
+            
             X = df_ml[['hour', 'dayofweek', 'lag_1']]
             y = df_ml['montant']
             
-            # 2. Entrainement (Random Forest)
+            # 2. Entrainement
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X, y)
             
-            # 3. Prédiction Future (Iterative)
-            future_predictions = []
-            last_date = df_hourly['date'].iloc[-1]
-            last_val = df_hourly['montant'].iloc[-1] # Pour le premier lag
+            # 3. Prédictions (Heure courante + 24h suivantes)
+            future_preds = []
             
-            current_date = last_date
-            current_lag = last_val
+            # Point de départ : la dernière heure connue de l'historique d'entraînement
+            last_known_date = df_history['date'].iloc[-1]
+            last_known_val = df_history['montant'].iloc[-1]
             
-            for i in range(1, 25): # 24 prochaines heures
-                next_date = current_date + pd.Timedelta(hours=1)
+            curr_date = last_known_date
+            curr_lag = last_known_val
+            
+            # On prédit pour : Heure Courante + 24h Futures = 25 périodes
+            for i in range(1, 26): 
+                next_date = curr_date + pd.Timedelta(hours=1)
                 
-                # Features pour la prochaine heure
                 next_features = pd.DataFrame([{
                     'hour': next_date.hour,
                     'dayofweek': next_date.dayofweek,
-                    'lag_1': current_lag
+                    'lag_1': curr_lag
                 }])
                 
-                # Predire
                 pred = model.predict(next_features)[0]
-                pred = max(0, pred) # Pas de montant négatif
+                pred = max(0, pred)
                 
-                future_predictions.append({
+                # Type de prévision
+                lbl = 'Prévision (Heure en cours)' if next_date == current_time.floor('h') else 'Prévision (Futur)'
+                
+                future_preds.append({
                     'date': next_date,
                     'montant': pred,
-                    'type': 'Prévision IA'
+                    'type': lbl
                 })
                 
-                # Mise à jour pour l'itération suivante
-                current_date = next_date
-                current_lag = pred
+                curr_date = next_date
+                curr_lag = pred
+                
+            return pd.DataFrame(future_preds), model
+
+        # Exécution de la prévision
+        df_forecast, _ = predict_future_volumes(df_train)
+        
+        if df_forecast is not None:
+            # --- AFFICHAGE / COMPARAISON ---
             
-            df_forecast = pd.DataFrame(future_predictions)
+            # 1. Comparaison Heure Courante (Réel vs Prévu)
+            current_hour_date = current_time.floor('h')
             
-            df_hourly['type'] = 'Réel'
-            df_combined = pd.concat([df_hourly[['date', 'montant', 'type']], df_forecast])
+            # Réel (si dispo)
+            real_current = df_hourly[df_hourly['date'] == current_hour_date]['montant'].sum() # Sera 0 si pas encore de transaction
             
-            # Plotly Graph Amélioré
-            fig = px.line(df_combined, x='date', y='montant', color='type', 
-                          title="Volume Transactionnel : Modèle Prédictif Avancé (RF)",
-                          color_discrete_map={"Réel": "#198754", "Prévision IA": "#0d6efd"})
+            # Prévu
+            pred_current_row = df_forecast[df_forecast['date'] == current_hour_date]
+            pred_current = pred_current_row['montant'].iloc[0] if not pred_current_row.empty else 0
+            
+            delta_current = real_current - pred_current
+            
+            col_kpi_ia1, col_kpi_ia2 = st.columns(2)
+            
+            col_kpi_ia1.metric(
+                "🎯 Heure en cours (Réel)", 
+                f"{real_current:,.0f} F".replace(",", " "),
+                delta=f"{delta_current:,.0f} F vs Prévision",
+                help="Volume réel enregistré depuis le début de l'heure"
+            )
+            
+            col_kpi_ia2.metric(
+                "🤖 Heure en cours (Prévision IA)",
+                f"{pred_current:,.0f} F".replace(",", " "),
+                help="Ce que l'IA avait prévu pour cette heure (basé sur l'historique)"
+            )
+            
+            # 2. Graphique Global
+            # On combine : Historique Passé (Réel) + Prévisions
+            df_display = pd.concat([
+                df_train.assign(type='Historique (Réel)'),
+                df_forecast
+            ])
+            
+            # On ajoute le point "Réel" de l'heure courante pour la comparaison visuelle
+            if real_current > 0:
+                current_point = pd.DataFrame([{
+                    'date': current_hour_date,
+                    'montant': real_current,
+                    'type': 'Temps Réel (En cours)'
+                }])
+                df_display = pd.concat([df_display, current_point])
+            
+            fig = px.line(df_display, x='date', y='montant', color='type',
+                          title="Projection et Suivi Temps Réel",
+                          color_discrete_map={
+                              "Historique (Réel)": "#198754", # Vert
+                              "Temps Réel (En cours)": "#dc3545", # Rouge (pour bien le voir)
+                              "Prévision (Heure en cours)": "#ffc107", # Jaune
+                              "Prévision (Futur)": "#0d6efd" # Bleu
+                          })
             
             fig.update_traces(mode='lines+markers')
-            fig.for_each_trace(lambda t: t.update(line=dict(dash='dash', width=3)) if t.name == 'Prévision IA' else None)
+            # Pointillés pour le futur
+            fig.for_each_trace(lambda t: t.update(line=dict(dash='dash')) if 'Prévision' in t.name else None)
             
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Texte explicatif stable
+            vol_next_24 = df_forecast[df_forecast['type'] == 'Prévision (Futur)']['montant'].sum()
+            
+            st.info(f"""
+            ℹ️ **Analyse Stable :** 
+            Pour les prochaines 24h, l'IA anticipe un volume total de **{vol_next_24:,.0f} F**.
+            La prévision est mise à jour statiquement à chaque heure pile pour éviter les fluctuations.
+            """)
+            
         else:
-             st.info("Collecte de données en cours pour initialiser l'IA prédictive...")
-             st.line_chart(df_hourly.set_index('date')['montant'])
+            st.warning("Données insuffisantes pour la modélisation (besoin de plus d'historique stable).")
+            st.line_chart(df_hourly.set_index('date')['montant'])
+            
     else:
-        st.info("Pas assez de données pour le modèle avancé (Min. 24h). Affichage linéaire basique.")
+        st.info("Collecte d'historique en cours (Min. 24h d'heures COMPLÈTES requises)...")
+        st.info(f"Heures complètes disponibles : {len(df_train)}")
         st.line_chart(df_hourly.set_index('date')['montant'])
 
-# --- NAVIGATION ---
-menu = st.sidebar.radio("Navigation", ["🛡️ Sécurité & Fraude", "💰 Finance & Tendances"])
+# --- AUTHENTIFICATION RENFORCÉE ---
+from dotenv import load_dotenv
 
-if menu == "🛡️ Sécurité & Fraude":
-    show_security_dashboard()
+# Charger les variables d'environnement (.env)
+load_dotenv()
+
+# Récupération sécurisée des identifiants
+SECURE_USER = os.getenv("ADMIN_USER", "admin")
+SECURE_PWD = os.getenv("ADMIN_PASSWORD", "admin123") # Fallback par défaut
+
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
+if 'login_attempts' not in st.session_state:
+    st.session_state['login_attempts'] = 0
+
+def check_password():
+    """Vérifie le mot de passe avec protection brute-force."""
+    # 1. Délai progressif après 3 échecs
+    if st.session_state['login_attempts'] >= 3:
+        st.warning("⚠️ Trop de tentatives. Veuillez patienter 30 secondes...")
+        time.sleep(30)
+        st.session_state['login_attempts'] = 0 # On reset après la punition
+
+    # 2. Vérification
+    if st.session_state['username'] == SECURE_USER and st.session_state['password'] == SECURE_PWD:
+        st.session_state['authenticated'] = True
+        st.session_state['login_attempts'] = 0
+    else:
+        st.session_state['login_attempts'] += 1
+        st.error(f"Identifiant ou mot de passe incorrect (Tentative {st.session_state['login_attempts']}/3)")
+
+def login_page():
+    """Affiche la page de connexion centrée."""
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #198754;'><i class='bi bi-shield-lock-fill'></i> MoneyShield CI</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #6c757d;'>Portail d'Administration Sécurisé</h4>", unsafe_allow_html=True)
+    st.write("")
+    st.write("")
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        with st.form("login_form"):
+            st.text_input("Identifiant", key="username")
+            st.text_input("Mot de passe", type="password", key="password")
+            st.form_submit_button("Se connecter", on_click=check_password, type="primary")
+
+if not st.session_state['authenticated']:
+    login_page()
 else:
-    show_financial_dashboard()
+    # --- SIDEBAR LOGOUT ---
+    st.sidebar.info(f"👤 Connecté : **{SECURE_USER}**")
+    if st.sidebar.button("🔒 Déconnexion"):
+        st.session_state['authenticated'] = False
+        st.rerun()
+        
+    st.sidebar.markdown("---")
 
-# Footer commun
-# Auto-refresh logic moved mainly to pages logic if needed, but we can keep global refresh
-# --- REFRESH AUTOMATIQUE ---
-st.sidebar.markdown("---")
-auto_refresh = st.sidebar.checkbox("🔄 Auto-Refresh", value=True, help="Décochez pour mettre en pause le rafraîchissement automatique")
+    # --- NAVIGATION EXISTANTE ---
+    menu = st.sidebar.radio("Navigation", ["🛡️ Sécurité & Fraude", "💰 Finance & Tendances"])
 
-if auto_refresh:
-    time.sleep(5) 
-    st.rerun()
-else:
-    st.sidebar.warning("⚠️ Refresh en pause")
+    if menu == "🛡️ Sécurité & Fraude":
+        show_security_dashboard()
+    else:
+        show_financial_dashboard()
+
+    # --- REFRESH AUTOMATIQUE ---
+    st.sidebar.markdown("---")
+    auto_refresh = st.sidebar.checkbox("🔄 Auto-Refresh", value=True, help="Décochez pour mettre en pause le rafraîchissement automatique")
+
+    if auto_refresh:
+        time.sleep(5) 
+        st.rerun()
+    else:
+        st.sidebar.warning("⚠️ Refresh en pause")

@@ -59,6 +59,22 @@ if exist ".venv\Scripts\python.exe" (
     ) else (
         echo [ERREUR] streamlit non installe
     )
+
+    echo Verification de fastapi...
+    .venv\Scripts\python.exe -c "import fastapi; print('fastapi:', fastapi.__version__)" 2>&1
+    if !ERRORLEVEL! EQU 0 (
+        echo [OK] fastapi installe
+    ) else (
+        echo [ERREUR] fastapi non installe
+    )
+
+    echo Verification de uvicorn...
+    .venv\Scripts\python.exe -c "import uvicorn; print('uvicorn:', uvicorn.__version__)" 2>&1
+    if !ERRORLEVEL! EQU 0 (
+        echo [OK] uvicorn installe
+    ) else (
+        echo [ERREUR] uvicorn non installe
+    )
 ) else (
     echo [SKIP] Environnement virtuel non trouve
 )
@@ -123,6 +139,12 @@ if exist "app\detector\modele_fraude.pkl" (
     echo [OK] modele_fraude.pkl existe
 ) else (
     echo [ATTENTION] modele_fraude.pkl manquant (sera genere au demarrage)
+)
+
+if exist "app\api\main.py" (
+    echo [OK] app\api\main.py existe
+) else (
+    echo [ERREUR] app\api\main.py manquant
 )
 echo.
 

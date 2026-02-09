@@ -8,7 +8,7 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "2181:2181"
+      - "22181:2181"
     networks:
       - mm-network
 
@@ -30,10 +30,25 @@ services:
     networks:
       - mm-network
 
+  # --- BACKEND API (FastAPI) ---
+  api:
+    build: .
+    container_name: api
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app/detector/modele_fraude.pkl:/app/app/detector/modele_fraude.pkl:ro
+      - ./moneyshield.db:/app/moneyshield.db
+      - .:/app # Hot reload dev
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - mm-network
+
+  # --- WORKERS & DASHBOARD ---
   generator:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: generator
     command: python -m app.generator.generateur
     depends_on:
@@ -45,9 +60,7 @@ services:
     restart: unless-stopped
 
   detector:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: detector
     command: python -m app.detector.detecteur
     depends_on:
@@ -55,22 +68,21 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     volumes:
-      - ./app/detector/modele_fraude.pkl:/project/app/detector/modele_fraude.pkl:ro
-      - ./moneyshield.db:/project/moneyshield.db
+      - ./app/detector/modele_fraude.pkl:/app/app/detector/modele_fraude.pkl:ro
+      - ./moneyshield.db:/app/moneyshield.db
     networks:
       - mm-network
     restart: unless-stopped
 
   dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: dashboard
     command: streamlit run app/dashboard/dashboard.py --server.port=8501 --server.address=0.0.0.0
     ports:
       - "8501:8501"
     volumes:
-      - ./moneyshield.db:/project/moneyshield.db
+      - ./moneyshield.db:/app/moneyshield.db
+      - .:/app # Hot reload dev
     networks:
       - mm-network
     restart: unless-stopped

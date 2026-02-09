@@ -60,10 +60,18 @@ graph LR
     python -m venv .venv
     .\.venv\Scripts\activate
     ```
-3.  **Installer les dépendances** :
+6.  **Installer les dépendances** :
     ```bash
     pip install -r requirements.txt
     ```
+
+### 🔒 Configuration Globale (.env)
+A la racine du projet, créez un fichier `.env` pour sécuriser vos accès :
+```ini
+ADMIN_USER=admin
+ADMIN_PASSWORD=MonMotDePasseSecret
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
 
 ---
 
