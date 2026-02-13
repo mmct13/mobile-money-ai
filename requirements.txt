@@ -6,3 +6,7 @@ joblib
 numpy
 kafka-python
 faker
+fastapi
+uvicorn
+python-dotenv
+watchdog

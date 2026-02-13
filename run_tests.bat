@@ -12,7 +12,7 @@ echo ⚡ Activation de l'environnement virtuel...
 call .venv\Scripts\activate.bat
 echo.
 
-echo [1/3] 📦 Test des imports Python...
+echo [1/4] 📦 Test des imports Python...
 python test_imports.py
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ ERREUR: Tests d'imports echoues
@@ -22,7 +22,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo ✅ OK - Imports valides
 
 echo.
-echo [2/3] 📊 Validation du dashboard...
+echo [2/4] 📊 Validation du dashboard...
 python test_dashboard.py
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ ERREUR: Validation du dashboard echouee
@@ -32,7 +32,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo ✅ OK - Dashboard valide
 
 echo.
-echo [3/3] 🔍 Verification complete du projet...
+echo [3/4] 🔍 Verification complete du projet...
 python verify_project.py
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ ERREUR: Verification complete echouee
@@ -40,6 +40,16 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 echo ✅ OK - Projet verifie
+
+echo.
+echo [4/4] 🔌 Test de l'API...
+python test_api_v1.py
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ ERREUR: Test API echoue
+    pause
+    exit /b 1
+)
+echo ✅ OK - API fonctionnelle
 
 echo.
 echo ============================================================

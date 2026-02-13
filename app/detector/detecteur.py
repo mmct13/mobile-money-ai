@@ -5,60 +5,63 @@ from kafka import KafkaConsumer
 from datetime import datetime
 import os
 import time
+import logging
 from collections import deque
+from typing import Dict, Any, Optional
 
 # --- NOUVEAUX IMPORTS (Architecture Modulaire) ---
 from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX, KAFKA_TOPIC
 from app.database import get_connection
 from app.detector.classificateur_fraude import ClassificateurFraude
 
+# --- CONFIGURATION LOGGING ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
 FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
 
 # Récupération de l'adresse Kafka (Docker ou Local)
-# Si la variable d'env n'existe pas, on utilise localhost par défaut
 KAFKA_SERVER = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
-def charger_modele():
+def charger_modele() -> Any:
     """Charge le modèle IA de détection de fraude."""
     if not os.path.exists(FICHIER_MODELE):
-        print("\n" + "=" * 60)
-        print("[ERROR] Modele IA introuvable")
-        print(f"Chemin attendu: {FICHIER_MODELE}")
-        print("\n[TIP] Solution:")
-        print("   python -m app.detector.entrainement")
-        print("=" * 60 + "\n")
+        logger.error("Modèle IA introuvable")
+        logger.error(f"Chemin attendu: {FICHIER_MODELE}")
+        logger.info("Solution: python -m app.detector.entrainement")
         exit(1)
     
-    print("\n" + "=" * 60)
-    print("MONEYSHIELD CI - Detecteur de Fraude IA")
-    print("=" * 60)
-    print("[INFO] Chargement du modele IA v3.1 (Classification Intelligente)...")
-    model = joblib.load(FICHIER_MODELE)
-    print("[SUCCESS] Modele charge avec succes")
-    print("=" * 60 + "\n")
-    return model
+    logger.info("=" * 60)
+    logger.info("MONEYSHIELD CI - Detecteur de Fraude IA")
+    logger.info("=" * 60)
+    logger.info("Chargement du modele IA v3.1 (Classification Intelligente)...")
+    try:
+        model = joblib.load(FICHIER_MODELE)
+        logger.info("Modele charge avec succes")
+        return model
+    except Exception as e:
+        logger.critical(f"Erreur fatale lors du chargement du modèle: {e}")
+        exit(1)
 
 
 def main():
     model = charger_modele()
     
     # Historique glissant pour détection temporelle (1000 dernières transactions)
-    # Permet de détecter vélocité et schtroumpfage
     historique_transactions = deque(maxlen=1000)
     
     # Initialisation du classificateur intelligent
     classificateur = ClassificateurFraude()
-    print("[INFO] Classificateur de fraude intelligent initialise")
-    print("   - 9 types de fraudes detectables incluant:")
-    print("      * Velocite Excessive (repetitions rapides)")
-    print("      * Accumulation/Schtroumpfage (structuring)")
-    print("      * Broutage, SIM Swap, Blanchiment...")
-    print()
-
+    logger.info("Classificateur de fraude intelligent initialise")
+    
     # Initialisation Kafka
-    print(f"[INFO] Connexion a Kafka sur : {KAFKA_SERVER} ...")
+    logger.info(f"Connexion a Kafka sur : {KAFKA_SERVER} ...")
     try:
         consumer = KafkaConsumer(
             KAFKA_TOPIC,
@@ -67,32 +70,26 @@ def main():
             value_deserializer=lambda x: json.loads(x.decode('utf-8'))
         )
     except Exception as e:
-        print("\n" + "=" * 60)
-        print("[ERROR] Connexion Kafka impossible")
-        print(f"Details: {e}")
-        print("\n[TIP] Verifiez que Kafka est demarre via Docker.")
-        print("=" * 60 + "\n")
+        logger.error("Connexion Kafka impossible")
+        logger.error(f"Details: {e}")
+        logger.info("Verifiez que Kafka est demarre via Docker.")
         return
 
-    print("[SUCCESS] SYSTEME ACTIF - En ecoute sur Kafka")
-    print("ANALYSE: Montant | Heure | Ville | Type | Operateur | Canal")
-    print("[INFO] En attente de transactions...")
-    print("\n" + "-" * 60 + "\n")
-
+    logger.info("SYSTEME ACTIF - En ecoute sur Kafka")
+    logger.info("En attente de transactions...")
+    
     for message in consumer:
         transaction = message.value
         
-        # Ajout à l'historique (au début pour accès rapide aux récents)
-        # Note: Dans un système prod, Redis serait mieux, mais deque suffit ici
+        # Ajout à l'historique
         historique_transactions.appendleft(transaction)
 
         try:
-            # 1. Extraction et Transformation des données (Preprocessing)
+            # 1. Extraction et Transformation des données
             dt = datetime.fromisoformat(transaction['date_heure'])
             heure = dt.hour
 
             ville_str = transaction.get('ville')
-            # Utilisation du mapping importé de app.config
             ville_code = MAP_VILLES.get(ville_str, -1)
 
             type_str = transaction.get('type_transaction')
@@ -115,11 +112,7 @@ def main():
             }])
 
             # 3. Prédiction (Random Forest)
-            # 0 = Normal, 1 = Fraude
             prediction = model.predict(features)[0] 
-            
-            # Probabilité de fraude (Classe 1)
-            # predict_proba renvoie [[prob_0, prob_1]]
             proba_fraude = model.predict_proba(features)[0][1]
             
             # --- CONTEXTE POUR CLASSIFICATION ---
@@ -130,55 +123,38 @@ def main():
 
             # 4. Logique d'affichage
             if prediction == 1:
-                print("\n" + "━" * 60)
-                print("[ALERT] FRAUDE DETECTEE")
-                print("━" * 60)
-                print(f" - Probabilite Fraude: {proba_fraude*100:.1f}%")
-                print(f" - Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
-                print(f" - Lieu: {ville_str} a {heure}h")
-                print(f" - Operateur: {op_str} (Canal: {canal_str})")
-                print(f" - Type: {type_str}")
-                print(f" - Expediteur: {transaction['expediteur']}")
-                
+                logger.warning("FRAUDE DETECTEE")
+                logger.warning(f"Probabilite: {proba_fraude*100:.1f}% | Montant: {transaction['montant']:,.0f} XOF".replace(",", " "))
+                logger.warning(f"Lieu: {ville_str} | Op: {op_str}")
+
                 # 4bis. Classification intelligente avec CONTEXTE
                 motif, description, confiance_regles = classificateur.classifier(transaction, contexte)
                 
-                # On combine la confiance IA et Règles
-                # Si l'IA est très sûre, ça renforce
                 confiance_globale = (proba_fraude + confiance_regles) / 2
                 
-                print(f" - Motif identifie: {motif}")
-                print(f"   Details: {description}")
-                print(f"   Confiance Globale: {confiance_globale*100:.1f}%")
-                print("[INFO] Alerte enregistree en BDD")
-                print("━" * 60 + "\n")
+                logger.warning(f"Motif: {motif} | Confiance Globale: {confiance_globale*100:.1f}%")
                 
-                # APPEL DE LA NOUVELLE FONCTION DE SAUVEGARDE SQL
-                # On passe proba_fraude comme score
                 sauvegarder_alerte(transaction, proba_fraude, type_str, ville_str, motif, confiance_globale)
             else:
                 # Transaction normale
-                print(f"[INFO] Transaction normale | {transaction['montant']:,} XOF | {op_str} ({canal_str}) | {ville_str}".replace(",", " "))
+                logger.info(f"OK | {transaction['montant']:,} F | {op_str} | {ville_str}".replace(",", " "))
 
         except Exception as e:
-            print(f"[ERROR] Erreur de traitement: {e}")
+            logger.error(f"Erreur de traitement: {e}")
         
-        # 5. Sauvegarde SYSTÉMATIQUE de toutes les transactions pour le Dashboard Financier
+        # 5. Sauvegarde SYSTÉMATIQUE
         try:
             sauvegarder_transaction(transaction)
         except Exception as e:
-             # On ne veut pas bloquer le procesus pour ça
-            pass
+             pass
 
 
-
-def sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance):
+def sauvegarder_alerte(transaction: Dict, score: float, type_str: str, ville_str: str, motif: str, confiance: float):
     """Sauvegarde l'alerte dans SQLite avec le score de confiance."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Requête SQL sécurisée avec confiance
         sql = '''
             INSERT INTO alertes 
             (timestamp, date_heure, montant, expediteur, ville, operateur, canal, type_trans, score, motif, confiance)
@@ -204,10 +180,10 @@ def sauvegarder_alerte(transaction, score, type_str, ville_str, motif, confiance
         conn.close()
         
     except Exception as e:
-        print(f"⚠️ Erreur lors de l'écriture en base de données: {e}")
+        logger.error(f"Erreur lors de l'écriture Alerte BDD: {e}")
 
 
-def sauvegarder_transaction(transaction):
+def sauvegarder_transaction(transaction: Dict):
     """Sauvegarde toutes les transactions pour le dashboard financier."""
     try:
         conn = get_connection()
@@ -237,8 +213,7 @@ def sauvegarder_transaction(transaction):
         conn.close()
         
     except Exception as e:
-        # En prod, logger silencieusement ou dans un fichier de log
-        print(f"[DB ERROR] Save Transaction: {e}")
+        pass # Silence en prod pour perf, ou logger.debug
 
 
 if __name__ == "__main__":

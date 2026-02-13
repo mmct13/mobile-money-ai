@@ -1,15 +1,20 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, IsolationForest
 import joblib
 import random
 from faker import Faker
 import os
+import sys
+
+# Ajout du dossier parent au PYTHONPATH pour les imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from app.config import MAP_VILLES, MAP_TYPES, MAP_OPERATEURS, MAP_CANAUX
 
 # --- CONFIGURATION ---
 DOSSIER_COURANT = os.path.dirname(os.path.abspath(__file__))
 FICHIER_MODELE = os.path.join(DOSSIER_COURANT, "modele_fraude.pkl")
+FICHIER_MODELE_ISO = os.path.join(DOSSIER_COURANT, "modele_isoforest.pkl")
 NB_TRANSACTIONS = 50000
 
 fake = Faker('fr_FR')
@@ -148,7 +153,7 @@ def preparer_features(df):
 
 def main():
     print("\n" + "=" * 60)
-    print("[INFO] MONEYSHIELD CI - Entrainement du Modele SUPERVISE")
+    print("[INFO] MONEYSHIELD CI - Entrainement des Modèles HYBRIDES")
     print("=" * 60)
     print("\n[INFO] Phase 1: Generation du dataset (Labelisé)")
     print("   - Villes: 20 localites ivoiriennes (Abidjan detaille)")
@@ -162,23 +167,39 @@ def main():
     print(f"   - Normales : {len(df) - ts_fraude:,}")
     print(f"   - Fraudes  : {ts_fraude:,} ({(ts_fraude/len(df))*100:.1f}%)")
 
-    print("\n[INFO] Phase 2: Entrainement Random Forest")
-    print("   - Algorithme: RandomForestClassifier")
-    print("   - Features: 6 dimensions")
-    print("   - Arbres: 100")
-    print("\n[INFO] Entrainement en cours...")
     X, y = preparer_features(df)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1, class_weight='balanced')
-    model.fit(X, y)
-    print("[SUCCESS] Modele entraine avec succes")
+    # --- MODELE 1 : SUPERVISE (Random Forest) ---
+    print("\n[INFO] Phase 2: Entrainement Random Forest (Supervisé)")
+    print("   - Apprend les fraudes connues (Label 1)")
+    print("\n[INFO] Entrainement en cours...")
+    
+    model_rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1, class_weight='balanced')
+    model_rf.fit(X, y)
+    print("[SUCCESS] Modele Random Forest entraine")
 
-    print("\n[INFO] Phase 3: Sauvegarde du modele")
-    joblib.dump(model, FICHIER_MODELE)
+    # --- MODELE 2 : NON-SUPERVISE (Isolation Forest) ---
+    print("\n[INFO] Phase 3: Entrainement Isolation Forest (Non-Supervisé)")
+    print("   - Apprend la 'normalité' statistique")
+    print("   - Detecte les anomalies inconnues (Outliers)")
+    print(f"   - Contamination estimée: 4%")
+    print("\n[INFO] Entrainement en cours...")
+    
+    # On entraîne sur TOUT, le modèle doit trouver les outliers lui-même
+    # contamination='auto' ou une valeur fixée si on a une idée du taux de fraude
+    model_iso = IsolationForest(n_estimators=100, contamination=0.04, random_state=42, n_jobs=-1)
+    model_iso.fit(X)
+    print("[SUCCESS] Modele Isolation Forest entraine")
+
+    # --- SAUVEGARDE ---
+    print("\n[INFO] Phase 4: Sauvegarde des modèles")
+    joblib.dump(model_rf, FICHIER_MODELE)
+    joblib.dump(model_iso, FICHIER_MODELE_ISO)
     print(f"[SUCCESS] Modele SUPERVISE sauvegarde: {FICHIER_MODELE}")
+    print(f"[SUCCESS] Modele NON-SUPERVISE sauvegarde: {FICHIER_MODELE_ISO}")
     
     print("\n" + "=" * 60)
-    print("ENTRAINEMENT TERMINE AVEC SUCCES")
+    print("ENTRAINEMENT HYBRIDE TERMINE")
     print("=" * 60)
     print("\n[INFO] Prochaines etapes:")
     print("   1. Demarrer Kafka: docker-compose up -d")
